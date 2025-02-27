@@ -13,7 +13,7 @@ def read_file(uploaded_files):
     texts = {}  # ✅ ใช้ dictionary เก็บข้อมูลแต่ละไฟล์
     for file in uploaded_files:
         if file.type == "text/plain":
-            text = file.getvalue().decode("utf-8")
+            text = file.getvalue().decode("utf-8", errors="ignore")  # ป้องกัน error เมื่อมี character ที่ไม่สามารถอ่านได้
         elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
             doc = Document(file)
             text = "\n".join([p.text for p in doc.paragraphs])
@@ -33,13 +33,16 @@ def compare_features_gemini(texts, category):
     for filename, text in texts.items():
         prompt += f"--- {filename} ---\n{text[:3000]}\n\n"  # ✅ จำกัดข้อความไม่เกิน 3000 ตัวอักษรต่อไฟล์
 
-    # เรียกใช้ Google Gemini API ผ่าน client
-    model = genai.GenerativeModel("gemini-2.0-flash")  # ✅ กำหนดโมเดลให้ถูกต้อง
-    response = model.generate_content(prompt)
-
-    if response and hasattr(response, "text"):
-        return response.text
-    return "⚠️ ไม่สามารถดึงข้อมูลจาก Gemini API ได้"
+    try:
+        # เรียกใช้ Google Gemini API ผ่าน client
+        model = genai.GenerativeModel("gemini-2.0-flash")  # ✅ กำหนดโมเดลให้ถูกต้อง
+        response = model.generate_content(prompt)
+        if response and hasattr(response, "text"):
+            return response.text
+        else:
+            return "⚠️ ไม่สามารถดึงข้อมูลจาก Gemini API ได้"
+    except Exception as e:
+        return f"⚠️ เกิดข้อผิดพลาด: {str(e)}"
 
 # 🎨 Streamlit UI
 st.title("🔬 แอปเปรียบเทียบคุณลักษณะเครื่องมือแพทย์ (ฺBME-Nonthavej)")
@@ -52,7 +55,8 @@ category = st.selectbox("📊 เลือกหมวดหมู่การ�
 if st.button("🔍 เปรียบเทียบ"):
     if 2 <= len(uploaded_files) <= 3:
         texts = read_file(uploaded_files)  # ✅ อ่านไฟล์และเก็บข้อมูลแยกตามชื่อไฟล์
-        result = compare_features_gemini(texts, category)
+        with st.spinner("กำลังเปรียบเทียบข้อมูล..."):
+            result = compare_features_gemini(texts, category)
 
         # 📌 แปลงผลลัพธ์เป็น DataFrame
         cleaned_result = result.replace("&nbsp;", " ")  # ✅ ลบคำว่า &nbsp;
